@@ -11,6 +11,7 @@
     <OutputPath>.</OutputPath>
     <Name>Text to Excel Converter</Name>
     <RootNamespace>Text to Excel Converter</RootNamespace>
+    <InterpreterId>MSBuild|Converter|$(MSBuildProjectFullPath)</InterpreterId>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -22,6 +23,17 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Text_to_Excel_Converter.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Interpreter Include="Converter\">
+      <Id>Converter</Id>
+      <Version>3.11</Version>
+      <Description>Converter (Python 3.11 (64-bit))</Description>
+      <InterpreterPath>Scripts\python.exe</InterpreterPath>
+      <WindowsInterpreterPath>Scripts\pythonw.exe</WindowsInterpreterPath>
+      <PathEnvironmentVariable>PYTHONPATH</PathEnvironmentVariable>
+      <Architecture>X64</Architecture>
+    </Interpreter>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
