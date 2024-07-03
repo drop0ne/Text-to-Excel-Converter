@@ -1,73 +1,12 @@
-import tkinter as tk
-from tkinter import filedialog, scrolledtext, ttk
+import sys
 import os
 import subprocess
-import sys
 import time
-import openpyxl
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QTextEdit, QPushButton, 
+                             QVBoxLayout, QWidget, QFileDialog, QProgressBar, QLabel)
+from PyQt5.QtCore import Qt
+from openpyxl import Workbook
 from openpyxl.styles import Font
-import ctypes
-
-# Hide the console window
-ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
-
-class ProgressBar:
-    def __init__(self, parent, total_steps, label):
-        self.total_steps = total_steps
-        self.current_step = 0
-        self.label = tk.Label(parent, text=label)
-        self.label.pack()
-        self.progress = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(parent, variable=self.progress, maximum=total_steps)
-        self.progress_bar.pack(fill=tk.X, padx=10, pady=5)
-
-    def update(self):
-        self.current_step += 1
-        self.progress.set(self.current_step)
-        self.label.update_idletasks()
-
-    def finish(self):
-        self.current_step = self.total_steps
-        self.progress.set(self.current_step)
-        self.label.update_idletasks()
-
-class TextInputDialog:
-    def __init__(self, parent):
-        self.dialog_window = tk.Toplevel(parent)
-        self.dialog_window.title("UTF-8 Text Input")
-        self.text_area = scrolledtext.ScrolledText(self.dialog_window, wrap=tk.WORD, width=100, height=40)
-        self.text_area.pack(padx=10, pady=10)
-        self.submit_button = tk.Button(self.dialog_window, text="Submit", command=self.on_submit)
-        self.submit_button.pack(pady=5)
-        self.input_text = None
-
-    def on_submit(self):
-        self.input_text = self.text_area.get("1.0", tk.END)
-        self.dialog_window.destroy()
-
-    def get_input_text(self):
-        self.dialog_window.grab_set()
-        self.dialog_window.wait_window()
-        return self.input_text
-
-class FileDialog:
-    @staticmethod
-    def get_save_path():
-        root = tk.Tk()
-        root.withdraw()
-        file_path = filedialog.asksaveasfilename(
-            initialdir=r"D:\Users\Main Profile\Documents\Developer Files\My Documents",
-            defaultextension=".xlsx",
-            filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
-        )
-        root.destroy()
-        return file_path
-
-class ExplorerOpener:
-    @staticmethod
-    def open_directory():
-        path = r"D:\Users\Main Profile\Documents\Developer Files\My Documents"
-        subprocess.run(f'explorer {path}', shell=True)
 
 class Document:
     def __init__(self, text):
@@ -81,7 +20,7 @@ class Document:
             self.sections.append(Section(section_text.strip()))
 
     def to_excel(self, file_path):
-        wb = openpyxl.Workbook()
+        wb = Workbook()
         ws = wb.active
         ws.title = "Magnetic Bearings"
         row = 1
@@ -148,56 +87,107 @@ class SubSection:
             row += 1
         return row
 
-class Application:
+class MainWindow(QMainWindow):
     def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("Website to Excel Downloader")
+        super().__init__()
 
-        self.progress_frame = tk.Frame(self.root)
-        self.progress_frame.pack(pady=10)
+        self.setWindowTitle("Website to Excel Downloader")
+        self.setGeometry(100, 100, 800, 600)
+        
+        self.text_edit = QTextEdit(self)
+        
+        self.reset_button = QPushButton("Reset", self)
+        self.reset_button.setEnabled(False)
+        self.reset_button.clicked.connect(self.reset)
 
-        self.input_text = None
+        self.exit_button = QPushButton("Exit", self)
+        self.exit_button.setEnabled(True)
+        self.exit_button.clicked.connect(self.exit_application)
+        
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setAlignment(Qt.AlignCenter)
+
+        self.label = QLabel("", self)
+
+        self.start_button = QPushButton("Start", self)
+        self.start_button.setEnabled(True)
+        self.start_button.clicked.connect(self.run_application)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.text_edit)
+        layout.addWidget(self.progress_bar)
+        layout.addWidget(self.label)
+        layout.addWidget(self.start_button)
+        layout.addWidget(self.reset_button)
+        layout.addWidget(self.exit_button)
+
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+
         self.file_path = None
+        self.input_text = None
 
-    def run(self):
-        self.input_text = self.get_text_input()
+    def run_application(self):
+        self.input_text = self.text_edit.toPlainText()
         if not self.input_text.strip():
-            self.quit_application()
+            self.label.setText("No input text provided.")
             return
 
-        self.show_progress_bar("Processing")
-        self.file_path = FileDialog.get_save_path()
+        self.show_progress("Processing")
+        self.file_path, _ = QFileDialog.getSaveFileName(self, "Save File", os.path.expanduser("~"), "Excel Files (*.xlsx);;All Files (*)")
         if self.file_path:
             self.process_document()
-            ExplorerOpener.open_directory()
-            self.show_progress_bar("Finalizing")
+            self.show_progress("Finalizing")
+            self.clear_memory()
+            self.reset_button.setEnabled(True)
+            self.exit_button.setEnabled(True)
         else:
-            print("Save operation cancelled.")
-        
-        self.quit_application()
+            self.label.setText("Save operation cancelled.")
+            self.reset_button.setEnabled(True)
+            self.exit_button.setEnabled(True)
 
-    def get_text_input(self):
-        text_input_dialog = TextInputDialog(self.root)
-        return text_input_dialog.get_input_text()
-
-    def show_progress_bar(self, label):
-        progress_bar = ProgressBar(self.progress_frame, total_steps=10, label=label)
-        for _ in range(10):
+    def show_progress(self, label_text):
+        self.label.setText(label_text)
+        for i in range(10):
             time.sleep(0.1)  # Simulate processing
-            progress_bar.update()
-        progress_bar.finish()
+            self.progress_bar.setValue((i + 1) * 10)
 
     def process_document(self):
         document = Document(self.input_text)
         document.to_excel(self.file_path)
+        self.open_directory()
 
-    def quit_application(self):
-        self.root.quit()
-        self.root.destroy()
+    def open_directory(self):
+        path = os.path.dirname(self.file_path)
+        if os.name == 'nt':
+            os.startfile(path)
+        elif os.name == 'posix':
+            subprocess.Popen(['xdg-open', path])
+
+    def clear_memory(self):
+        self.input_text = None
+        self.file_path = None
+        self.progress_bar.reset()
+        self.label.setText("")
+
+    def reset(self):
+        self.reset_button.setEnabled(False)
+        self.exit_button.setEnabled(False)
+        self.start_button.setEnabled(True)
+        self.text_edit.clear()
+        self.progress_bar.reset()
+        self.label.setText("")
+
+    def exit_application(self):
+        self.close()
+        sys.exit()
 
 def main():
-    app = Application()
-    app.run()
+    app = QApplication(sys.argv)
+    main_window = MainWindow()
+    main_window.show()
+    sys.exit(app.exec_())
 
 if __name__ == "__main__":
     main()
