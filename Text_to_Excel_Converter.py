@@ -1,52 +1,53 @@
-
-import pandas as pd
 import tkinter as tk
-from tkinter import filedialog, simpledialog, scrolledtext
+from tkinter import filedialog, scrolledtext, ttk
 import os
 import subprocess
 import sys
 import time
 import openpyxl
 from openpyxl.styles import Font
+import ctypes
+
+# Hide the console window
+ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 
 class ProgressBar:
-    def __init__(self, total_steps, label):
+    def __init__(self, parent, total_steps, label):
         self.total_steps = total_steps
         self.current_step = 0
-        self.label = label
-
-    def start(self):
-        print(f"{self.label}...")
-        self.update()
+        self.label = tk.Label(parent, text=label)
+        self.label.pack()
+        self.progress = tk.DoubleVar()
+        self.progress_bar = ttk.Progressbar(parent, variable=self.progress, maximum=total_steps)
+        self.progress_bar.pack(fill=tk.X, padx=10, pady=5)
 
     def update(self):
         self.current_step += 1
-        progress = int((self.current_step / self.total_steps) * 100)
-        bar = f"[{'#' * (progress // 2)}{'.' * (50 - progress // 2)}] {progress}%"
-        print(f"\r{bar}", end='', flush=True)
+        self.progress.set(self.current_step)
+        self.label.update_idletasks()
 
     def finish(self):
         self.current_step = self.total_steps
-        self.update()
-        print()  # Move to the next line
+        self.progress.set(self.current_step)
+        self.label.update_idletasks()
 
 class TextInputDialog:
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("UTF-8 Text Input")
-        self.text_area = scrolledtext.ScrolledText(self.root, wrap=tk.WORD, width=100, height=40)
+    def __init__(self, parent):
+        self.dialog_window = tk.Toplevel(parent)
+        self.dialog_window.title("UTF-8 Text Input")
+        self.text_area = scrolledtext.ScrolledText(self.dialog_window, wrap=tk.WORD, width=100, height=40)
         self.text_area.pack(padx=10, pady=10)
-        self.submit_button = tk.Button(self.root, text="Submit", command=self.on_submit)
+        self.submit_button = tk.Button(self.dialog_window, text="Submit", command=self.on_submit)
         self.submit_button.pack(pady=5)
         self.input_text = None
 
     def on_submit(self):
         self.input_text = self.text_area.get("1.0", tk.END)
-        self.root.quit()
-        self.root.destroy()
+        self.dialog_window.destroy()
 
     def get_input_text(self):
-        self.root.mainloop()
+        self.dialog_window.grab_set()
+        self.dialog_window.wait_window()
         return self.input_text
 
 class FileDialog:
@@ -54,7 +55,12 @@ class FileDialog:
     def get_save_path():
         root = tk.Tk()
         root.withdraw()
-        file_path = filedialog.asksaveasfilename(initialdir=r"D:\Users\Main Profile\Documents\Developer Files\My Documents", defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")])
+        file_path = filedialog.asksaveasfilename(
+            initialdir=r"D:\Users\Main Profile\Documents\Developer Files\My Documents",
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
+        )
+        root.destroy()
         return file_path
 
 class ExplorerOpener:
@@ -62,11 +68,6 @@ class ExplorerOpener:
     def open_directory():
         path = r"D:\Users\Main Profile\Documents\Developer Files\My Documents"
         subprocess.run(f'explorer {path}', shell=True)
-
-class ConsoleCloser:
-    @staticmethod
-    def close():
-        sys.exit()
 
 class Document:
     def __init__(self, text):
@@ -147,41 +148,56 @@ class SubSection:
             row += 1
         return row
 
-def main():
-    print("Website to Excel Downloader")
+class Application:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Website to Excel Downloader")
 
-    text_input_dialog = TextInputDialog()
-    input_text = text_input_dialog.get_input_text()
+        self.progress_frame = tk.Frame(self.root)
+        self.progress_frame.pack(pady=10)
 
-    if not input_text.strip():
-        print("No text provided.")
-        ConsoleCloser.close()
+        self.input_text = None
+        self.file_path = None
 
-    loading_bar = ProgressBar(total_steps=10, label="Processing")
-    loading_bar.start()
-    for _ in range(10):
-        time.sleep(0.1)  # Simulate processing
-        loading_bar.update()
-    loading_bar.finish()
+    def run(self):
+        self.input_text = self.get_text_input()
+        if not self.input_text.strip():
+            self.quit_application()
+            return
 
-    file_path = FileDialog.get_save_path()
-    if file_path:
-        document = Document(input_text)
-        document.to_excel(file_path)
+        self.show_progress_bar("Processing")
+        self.file_path = FileDialog.get_save_path()
+        if self.file_path:
+            self.process_document()
+            ExplorerOpener.open_directory()
+            self.show_progress_bar("Finalizing")
+        else:
+            print("Save operation cancelled.")
+        
+        self.quit_application()
 
-        ExplorerOpener.open_directory()
+    def get_text_input(self):
+        text_input_dialog = TextInputDialog(self.root)
+        return text_input_dialog.get_input_text()
 
-        finalizing_bar = ProgressBar(total_steps=10, label="Finalizing")
-        finalizing_bar.start()
+    def show_progress_bar(self, label):
+        progress_bar = ProgressBar(self.progress_frame, total_steps=10, label=label)
         for _ in range(10):
-            time.sleep(0.1)  # Simulate finalizing
-            finalizing_bar.update()
-        finalizing_bar.finish()
+            time.sleep(0.1)  # Simulate processing
+            progress_bar.update()
+        progress_bar.finish()
 
-        ConsoleCloser.close()
-    else:
-        print("Save operation cancelled.")
-        ConsoleCloser.close()
+    def process_document(self):
+        document = Document(self.input_text)
+        document.to_excel(self.file_path)
+
+    def quit_application(self):
+        self.root.quit()
+        self.root.destroy()
+
+def main():
+    app = Application()
+    app.run()
 
 if __name__ == "__main__":
     main()
